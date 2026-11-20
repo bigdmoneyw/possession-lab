@@ -1,0 +1,31 @@
+name: Possession Lab Domain Health
+on:
+  push:
+    paths:
+      - '.github/workflows/domain-health.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Read-only public DNS and website health check
+        run: |
+          echo "=== possessionlab.org authoritative NS ==="
+          dig +short possessionlab.org NS || true
+          echo "=== possessionlab.org apex A public ==="
+          dig @1.1.1.1 +short possessionlab.org A || true
+          echo "=== possessionlab.org apex A authoritative Porkbun ==="
+          dig @maceio.ns.porkbun.com +short possessionlab.org A || true
+          echo "=== possessionlab.org apex AAAA ==="
+          dig @1.1.1.1 +short possessionlab.org AAAA || true
+          echo "=== www possessionlab.org CNAME ==="
+          dig @1.1.1.1 +short www.possessionlab.org CNAME || true
+          echo "=== possessionlab.org HTTPS ==="
+          curl -sSIL --connect-timeout 8 --max-time 15 https://possessionlab.org/ || true
+          echo "=== possessionlab.org HTTP ==="
+          curl -sSI --connect-timeout 8 --max-time 15 http://possessionlab.org/ || true
+          echo "=== original GitHub Pages URL ==="
+          curl -sSI --connect-timeout 8 --max-time 15 https://bigdmoneyw.github.io/possession-lab/ || true
