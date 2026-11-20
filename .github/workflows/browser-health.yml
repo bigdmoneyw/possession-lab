@@ -1,0 +1,49 @@
+name: Possession Lab Browser Health
+on:
+  push:
+    paths:
+      - '.github/workflows/browser-health.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-browser-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: npm install --no-save playwright
+      - run: npx playwright install --with-deps chromium
+      - name: Inspect actual public site with browser
+        run: |
+          node --input-type=module <<'EOF'
+          import {chromium} from 'playwright';
+          const browser=await chromium.launch({headless:true,args:['--no-sandbox']});
+          const page=await browser.newPage({viewport:{width:1440,height:900}});
+          const errors=[],failed=[];
+          page.on('pageerror',e=>errors.push(e.message));
+          page.on('requestfailed',r=>failed.push(r.url()+': '+r.failure()?.errorText));
+          try {
+            const response=await page.goto('https://possessionlab.org/',{waitUntil:'networkidle',timeout:30000});
+            await page.waitForTimeout(1200);
+            console.log('PAGE_URL='+page.url());
+            console.log('PAGE_HTTP='+response?.status());
+            console.log('PAGE_TITLE='+await page.title());
+            console.log('BODY_TEXT_LENGTH='+(await page.locator('body').innerText()).length);
+            console.log('BODY_TEXT_HEAD='+(await page.locator('body').innerText()).slice(0,400).replaceAll('\n',' '));
+            console.log('NAV_LINK_COUNT='+await page.locator('nav a').count());
+            const routes=['model','learn','method','evidence','about'];
+            for(const route of routes){
+              await page.goto('https://www.possessionlab.org/#/'+route,{waitUntil:'networkidle',timeout:25000});
+              await page.waitForTimeout(200);
+              console.log('ROUTE_'+route+'='+await page.locator('main').count()+','+(await page.locator('main').innerText()).length);
+            }
+            console.log('JS_ERRORS='+JSON.stringify(errors));
+            console.log('FAILED_NETWORK='+JSON.stringify(failed.slice(0,20)));
+            if((await page.locator('main').innerText()).length<80 || errors.length)process.exitCode=1;
+          } catch(e) {console.error('BROWSER_ERROR='+e.stack);process.exitCode=1;}
+          await browser.close();
+          EOF
